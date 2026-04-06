@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>8-Channel Localization System</title>
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script> 
+    
+    <!-- Local Styles and Scripts -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-broadcast-tower"></i>
+                    <h1>8-Channel Localization</h1>
+                </div>
+                <div class="header-status">
+                    <div class="status-indicator" id="connectionStatus">
+                        <span class="status-dot disconnected"></span>
+                        <span class="status-text">Disconnected</span>
+                    </div>
+                    <div class="status-indicator" id="engineStatus">
+                        <span class="status-dot inactive"></span>
+                        <span class="status-text">Engine Stopped</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Real-time Visualization -->
+            <section class="visualization-panel">
+                <!-- Polar Plot -->
+                <div class="card polar-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-compass"></i> Source Direction</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="polar-container">
+                            <canvas id="polarChart"></canvas>
+                            <div class="polar-overlay">
+                                <div class="angle-display">
+                                    <span class="angle-value" id="angleValue">--</span>
+                                    <span class="angle-unit">deg</span>
+                                </div>
+                                <div class="distance-display">
+                                    <span class="distance-value" id="distanceValue">--</span>
+                                    <span class="distance-unit">m</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Array Geometry -->
+                <div class="card geometry-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-circle-notch"></i> Array Geometry</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="geometry-info">
+                            <div class="info-item">
+                                <span class="info-label">Diameter</span>
+                                <span class="info-value" id="diameterValue">-- m</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Channels</span>
+                                <span class="info-value" id="channelsValue">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Sample Rate</span>
+                                <span class="info-value" id="sampleRateValue">-- Hz</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-time Charts -->
+                <div class="card charts-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-line"></i> Time Series</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-sm" id="clearCharts" title="Clear Charts">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="angleChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="distanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel - Controls and Status -->
+            <aside class="control-panel">
+                <!-- Engine Control -->
+                <div class="card control-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-power-off"></i> Engine Control</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="button-group">
+                            <button class="btn btn-primary btn-lg" id="startEngine">
+                                <i class="fas fa-play"></i>
+                                Start Engine
+                            </button>
+                            <button class="btn btn-secondary btn-lg" id="stopEngine" disabled>
+                                <i class="fas fa-stop"></i>
+                                Stop Engine
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Quality -->
+                <div class="card quality-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-signal"></i> Signal Quality</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="quality-meters">
+                            <div class="meter-item">
+                                <div class="meter-label">
+                                    <span>SNR</span>
+                                    <span class="meter-value" id="snrValue">-- dB</span>
+                                </div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" id="snrMeter"></div>
+                                </div>
+                            </div>
+                            <div class="meter-item">
+                                <div class="meter-label">
+                                    <span>Coherence</span>
+                                    <span class="meter-value" id="coherenceValue">--</span>
+                                </div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" id="coherenceMeter"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="quality-indicators">
+                            <div class="indicator" id="detectionIndicator">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Detection</span>
+                            </div>
+                            <div class="indicator" id="updateIndicator">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Updated</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Algorithm Parameters -->
+                <div class="card params-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-sliders-h"></i> Parameters</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="param-group">
+                            <label for="diameterInput">Array Diameter (m)</label>
+                            <div class="input-group">
+                                <input type="number" id="diameterInput" 
+                                       step="0.001" min="0.06" max="0.6" 
+                                       placeholder="0.180">
+                                <button class="btn btn-sm" id="updateDiameter">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="cSoundInput">Speed of Sound (m/s)</label>
+                            <input type="number" id="cSoundInput" 
+                                   step="1" value="343">
+                        </div>
+                        <div class="param-group">
+                            <label for="cohThInput">Coherence Threshold</label>
+                            <input type="number" id="cohThInput" 
+                                   step="0.1" value="1.10">
+                        </div>
+                        <div class="param-group">
+                            <label for="vadThInput">VAD Threshold (dB)</label>
+                            <input type="number" id="vadThInput" 
+                                   step="0.5" value="6.0">
+                        </div>
+                        <button class="btn btn-outline btn-block" id="applyParams">
+                            Apply Parameters
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Metrics -->
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-ruler-combined"></i> Error Metrics</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">Plane Error</span>
+                                <span class="metric-value" id="planeError">-- us</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Near Error</span>
+                                <span class="metric-value" id="nearError">-- us</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Rho Hat</span>
+                                <span class="metric-value" id="rhoHat">-- m</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Frame Count</span>
+                                <span class="metric-value" id="frameCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Device Info -->
+                <div class="card device-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-microphone-alt"></i> Device Info</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="device-info">
+                            <div class="info-row">
+                                <span class="info-label">Name</span>
+                                <span class="info-value" id="deviceName">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Status</span>
+                                <span class="info-value" id="deviceStatus">Not Selected</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>8-Channel Microphone Array Localization System | FYP 2026</p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay  -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Initializing...</span>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- JavaScript Application -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

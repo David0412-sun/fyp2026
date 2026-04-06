@@ -1,0 +1,10 @@
+2026-01-31 22:36:28,609 - werkzeug - INFO - Press CTRL+C to quit
+2026-01-31 22:36:29,668 - __main__ - INFO - Client connected: NPJQLgJkO2m5_qAOAAAB
+2026-01-31 22:36:32,911 - werkzeug - INFO - 192.168.5.18 - - [31/Jan/2026 22:36:32] "GET / HTTP/1.1" 200 -
+2026-01-31 22:36:32,955 - werkzeug - INFO - 192.168.5.18 - - [31/Jan/2026 22:36:32] "GET /static/css/style.css HTTP/1.1" 304 -
+2026-01-31 22:36:32,958 - werkzeug - INFO - 192.168.5.18 - - [31/Jan/2026 22:36:32] "GET /static/js/app.js HTTP/1.1" 304 -
+2026-01-31 22:36:32,983 - werkzeug - INFO - 192.168.5.18 - - [31/Jan/2026 22:36:32] "GET /api/config HTTP/1.1" 200 -
+2026-01-31 22:36:33,018 - __main__ - INFO - Client connected: LZdcx0qhmMYQ2mK6AAAD
+[DEVICE] Selected: index=4, name='pipewire', channels=64, sample_rate=44100.0
+[ENGINE] Initialized: 64 channels @ 44100.0 Hz
+[ENGINE] Array diameter: 0.180 m
