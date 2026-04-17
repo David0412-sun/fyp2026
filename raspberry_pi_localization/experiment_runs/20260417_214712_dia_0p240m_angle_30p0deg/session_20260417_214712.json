@@ -1,0 +1,48 @@
+{
+  "run_tag": "20260417_214712",
+  "started_at": "2026-04-17T21:47:12.865+08:00",
+  "ended_at": "2026-04-17T21:47:58.992+08:00",
+  "blocksize": 1024,
+  "device_name_hint": "YDM8MIC Audio",
+  "device_name_default_hint": "YDM8MIC",
+  "stream_channels": null,
+  "channel_map": null,
+  "diameter_m": 0.24,
+  "diameter_tag": "dia_0p240m",
+  "c_sound": 343.0,
+  "test_angle_input": "30",
+  "test_angle_deg": 30.0,
+  "angle_tag": "angle_30p0deg",
+  "angle_output_convention": "channel_1_as_0deg_counterclockwise_0_to_360",
+  "run_directory": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_214712_dia_0p240m_angle_30p0deg",
+  "results_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_214712_dia_0p240m_angle_30p0deg\\localization_20260417_214712.jsonl",
+  "csv_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_214712_dia_0p240m_angle_30p0deg\\localization_20260417_214712.csv",
+  "audio_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_214712_dia_0p240m_angle_30p0deg\\audio_20260417_214712.wav",
+  "device_name": "麦克风阵列 (YDM8MIC Audio)",
+  "samplerate": 48000.0,
+  "channels": 8,
+  "frequency_response_compensation": {
+    "enabled": true,
+    "points_hz": [
+      20.0,
+      100.0,
+      900.0,
+      4000.0
+    ],
+    "gain_db": [
+      12.5,
+      12.5,
+      20.0,
+      30.0
+    ]
+  },
+  "spl_calibration": {
+    "reference_pressure_pa": 2e-05,
+    "offset_db": 20.0,
+    "method": "frequency_compensated_rms_plus_empirical_meter_offset"
+  },
+  "saved_result_count": 2159,
+  "saved_audio_blocks": 2160,
+  "saved_audio_frames": 2211840,
+  "status": "stopped"
+}

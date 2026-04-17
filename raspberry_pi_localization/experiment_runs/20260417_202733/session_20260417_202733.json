@@ -1,0 +1,21 @@
+{
+  "run_tag": "20260417_202733",
+  "started_at": "2026-04-17T20:27:33.254+08:00",
+  "ended_at": "2026-04-17T20:27:45.692+08:00",
+  "blocksize": 1024,
+  "device_name_hint": "ASIOVADPRO Wave4",
+  "device_name_default_hint": "YDM8MIC",
+  "stream_channels": null,
+  "channel_map": null,
+  "diameter_m": 0.12,
+  "c_sound": 343.0,
+  "results_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_202733\\localization_20260417_202733.jsonl",
+  "audio_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_202733\\audio_20260417_202733.wav",
+  "device_name": "多道录音机 (ASIOVADPRO Wave4)",
+  "samplerate": 44100.0,
+  "channels": 8,
+  "saved_result_count": 534,
+  "saved_audio_blocks": 535,
+  "saved_audio_frames": 547840,
+  "status": "stopped"
+}

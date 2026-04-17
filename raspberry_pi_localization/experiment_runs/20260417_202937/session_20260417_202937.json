@@ -1,0 +1,21 @@
+{
+  "run_tag": "20260417_202937",
+  "started_at": "2026-04-17T20:29:37.615+08:00",
+  "ended_at": "2026-04-17T20:29:45.609+08:00",
+  "blocksize": 1024,
+  "device_name_hint": "YDM8MIC Audio",
+  "device_name_default_hint": "YDM8MIC",
+  "stream_channels": null,
+  "channel_map": null,
+  "diameter_m": 0.12,
+  "c_sound": 343.0,
+  "results_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_202937\\localization_20260417_202937.jsonl",
+  "audio_file": "D:\\fyp2026\\raspberry_pi_localization\\experiment_runs\\20260417_202937\\audio_20260417_202937.wav",
+  "device_name": "麦克风阵列 (YDM8MIC Audio)",
+  "samplerate": 48000.0,
+  "channels": 8,
+  "saved_result_count": 370,
+  "saved_audio_blocks": 371,
+  "saved_audio_frames": 379904,
+  "status": "stopped"
+}
