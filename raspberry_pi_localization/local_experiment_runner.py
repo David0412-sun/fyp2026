@@ -193,35 +193,68 @@ def sanitize_diameter_tag(diameter_m: float) -> str:
     return f"dia_{magnitude}m"
 
 
+def sanitize_frequency_tag(frequency_text: str, frequency_hz: Optional[float]) -> str:
+    """Build a filesystem-safe frequency tag for the run directory and files."""
+    if frequency_hz is not None and math.isfinite(frequency_hz) and frequency_hz > 0.0:
+        magnitude = f"{frequency_hz:.1f}".replace(".", "p")
+        return f"freq_{magnitude}hz"
+
+    cleaned = []
+    for char in frequency_text.strip():
+        if char.isalnum():
+            cleaned.append(char.lower())
+        elif char in {"-", "_"}:
+            cleaned.append(char)
+        else:
+            cleaned.append("_")
+
+    tag = "".join(cleaned).strip("_") or "unknown"
+    while "__" in tag:
+        tag = tag.replace("__", "_")
+    return f"freq_{tag}"
+
+
 def make_run_paths(
     output_dir: Path,
     diameter_tag: str,
     angle_tag: str,
+    frequency_tag: str,
 ) -> tuple[str, Path, Path, Path, Path, Path]:
     """Create a timestamped run directory and return output paths."""
     run_tag = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
-    run_dir = output_dir / f"{run_tag}_{diameter_tag}_{angle_tag}"
+    run_dir = output_dir / f"{run_tag}_{diameter_tag}_{angle_tag}_{frequency_tag}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    wav_path = run_dir / f"audio_{run_tag}.wav"
-    results_path = run_dir / f"localization_{run_tag}.jsonl"
-    csv_path = run_dir / f"localization_{run_tag}.csv"
-    metadata_path = run_dir / f"session_{run_tag}.json"
+    wav_path = run_dir / f"audio_{run_tag}_{frequency_tag}.wav"
+    results_path = run_dir / f"localization_{run_tag}_{frequency_tag}.jsonl"
+    csv_path = run_dir / f"localization_{run_tag}_{frequency_tag}.csv"
+    metadata_path = run_dir / f"session_{run_tag}_{frequency_tag}.json"
     return run_tag, run_dir, wav_path, results_path, csv_path, metadata_path
 
 
 def prompt_experiment_setup(
     default_diameter_m: float,
-) -> tuple[float, str, str, Optional[float], str]:
+) -> tuple[float, str, str, Optional[float], str, str, Optional[float], str]:
     """
-    Ask the user for the current experiment diameter and test angle.
+    Ask the user for the current experiment diameter, test angle, and frequency.
 
     Returns:
-        Tuple of (diameter_m, diameter_tag, angle_input, angle_deg, angle_tag)
+        Tuple of (
+            diameter_m,
+            diameter_tag,
+            angle_input,
+            angle_deg,
+            angle_tag,
+            frequency_input,
+            frequency_hz,
+            frequency_tag,
+        )
     """
     if not sys.stdin or not sys.stdin.isatty():
         angle_input = "unknown"
         angle_deg = None
+        frequency_input = "unknown"
+        frequency_hz = None
         diameter_m = float(default_diameter_m)
         return (
             diameter_m,
@@ -229,6 +262,9 @@ def prompt_experiment_setup(
             angle_input,
             angle_deg,
             sanitize_angle_tag(angle_input, angle_deg),
+            frequency_input,
+            frequency_hz,
+            sanitize_frequency_tag(frequency_input, frequency_hz),
         )
 
     print("[INPUT] Enter the current experiment setup before localization starts.")
@@ -262,7 +298,41 @@ def prompt_experiment_setup(
 
     angle_deg = _parse_optional_float(angle_input)
     angle_tag = sanitize_angle_tag(angle_input, angle_deg)
-    return diameter_m, sanitize_diameter_tag(diameter_m), angle_input, angle_deg, angle_tag
+
+    while True:
+        try:
+            frequency_input = input(
+                "Current test frequency in Hz or label (used in folder/file names) [unknown]: "
+            ).strip()
+        except EOFError:
+            frequency_input = ""
+
+        if not frequency_input:
+            frequency_input = "unknown"
+            frequency_hz = None
+            break
+
+        parsed_frequency = _parse_optional_float(frequency_input)
+        if parsed_frequency is None:
+            frequency_hz = None
+            break
+
+        if parsed_frequency > 0.0:
+            frequency_hz = float(parsed_frequency)
+            break
+
+        print("[INPUT] Please enter a positive frequency in Hz or a text label, for example 1000")
+
+    return (
+        diameter_m,
+        sanitize_diameter_tag(diameter_m),
+        angle_input,
+        angle_deg,
+        angle_tag,
+        frequency_input,
+        frequency_hz,
+        sanitize_frequency_tag(frequency_input, frequency_hz),
+    )
 
 
 class ExperimentLocalizationEngine(LocalizationEngine):
@@ -724,6 +794,7 @@ class ExperimentLocalizationEngine(LocalizationEngine):
 def build_result_payload(
     result: Any,
     audio_meta: Optional[Dict[str, float]],
+    experiment_setup: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build one saved record using the remote web payload plus extra fields."""
     now_wall = time.time()
@@ -743,11 +814,19 @@ def build_result_payload(
         "snr_db": _safe_num(getattr(result, "snr_db", None)),
         "coherence": _safe_num(getattr(result, "coherence", None)),
         "diameter_m": _safe_num(getattr(result, "diameter_m", None)),
+        "test_diameter_m": _safe_num(experiment_setup.get("test_diameter_m")),
+        "diameter_tag": experiment_setup.get("diameter_tag"),
         "update_flag": _safe_int(getattr(result, "update_flag", None)),
         "error_plane_us": _safe_num(getattr(result, "error_plane_us", None)),
         "error_near_us": _safe_num(getattr(result, "error_near_us", None)),
         "rho_hat": _safe_num(getattr(result, "rho_hat", None)),
         "valid": bool(getattr(result, "valid", False)),
+        "test_angle_input": experiment_setup.get("test_angle_input"),
+        "test_angle_deg": _safe_num(experiment_setup.get("test_angle_deg")),
+        "angle_tag": experiment_setup.get("angle_tag"),
+        "test_frequency_input": experiment_setup.get("test_frequency_input"),
+        "test_frequency_hz": _safe_num(experiment_setup.get("test_frequency_hz")),
+        "frequency_tag": experiment_setup.get("frequency_tag"),
         "loudness_db": loudness_db,
         "loudness_rms": _safe_num(getattr(result, "loudness_rms", None)),
         "loudness_peak_abs": _safe_num(getattr(result, "loudness_peak_abs", None)),
@@ -877,17 +956,35 @@ def main() -> int:
         print(f"[ERROR] {exc}")
         return 1
 
-    run_diameter_m, diameter_tag, test_angle_input, test_angle_deg, angle_tag = prompt_experiment_setup(
-        args.diameter
-    )
+    (
+        run_diameter_m,
+        diameter_tag,
+        test_angle_input,
+        test_angle_deg,
+        angle_tag,
+        test_frequency_input,
+        test_frequency_hz,
+        frequency_tag,
+    ) = prompt_experiment_setup(args.diameter)
 
     output_dir = args.output_dir.expanduser().resolve()
     run_tag, run_dir, wav_path, results_path, csv_path, metadata_path = make_run_paths(
         output_dir,
         diameter_tag,
         angle_tag,
+        frequency_tag,
     )
     started_at = datetime.now().astimezone().isoformat(timespec="milliseconds")
+    experiment_setup = {
+        "test_diameter_m": run_diameter_m,
+        "diameter_tag": diameter_tag,
+        "test_angle_input": test_angle_input,
+        "test_angle_deg": test_angle_deg,
+        "angle_tag": angle_tag,
+        "test_frequency_input": test_frequency_input,
+        "test_frequency_hz": test_frequency_hz,
+        "frequency_tag": frequency_tag,
+    }
 
     device_config = DeviceConfig(
         device_name_hint=args.device,
@@ -925,6 +1022,9 @@ def main() -> int:
             "test_angle_input": test_angle_input,
             "test_angle_deg": test_angle_deg,
             "angle_tag": angle_tag,
+            "test_frequency_input": test_frequency_input,
+            "test_frequency_hz": test_frequency_hz,
+            "frequency_tag": frequency_tag,
             "angle_output_convention": "channel_1_as_0deg_counterclockwise_0_to_360",
             "run_directory": str(run_dir),
             "results_file": str(results_path),
@@ -954,6 +1054,7 @@ def main() -> int:
         print(f"[RUN] input diameter={run_diameter_m:.3f} m")
         print(f"[RUN] engine diameter={engine.diameter_m:.3f} m")
         print(f"[RUN] test angle={test_angle_input}")
+        print(f"[RUN] test frequency={test_frequency_input}")
         print(
             "[RUN] freq compensation="
             + ", ".join(
@@ -980,7 +1081,7 @@ def main() -> int:
                             continue
 
                         audio_meta = engine.pop_latest_audio_meta()
-                        payload = build_result_payload(result, audio_meta)
+                        payload = build_result_payload(result, audio_meta, experiment_setup)
                         results_file.write(json.dumps(payload, ensure_ascii=False) + "\n")
                         if csv_writer is None:
                             csv_writer = csv.DictWriter(csv_file, fieldnames=list(payload.keys()))
@@ -1011,6 +1112,9 @@ def main() -> int:
             "test_angle_input": test_angle_input,
             "test_angle_deg": test_angle_deg,
             "angle_tag": angle_tag,
+            "test_frequency_input": test_frequency_input,
+            "test_frequency_hz": test_frequency_hz,
+            "frequency_tag": frequency_tag,
             "angle_output_convention": "channel_1_as_0deg_counterclockwise_0_to_360",
             "run_directory": str(run_dir),
             "results_file": str(results_path),
