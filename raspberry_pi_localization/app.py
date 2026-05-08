@@ -208,6 +208,21 @@ STATUS_INTERVAL_S = float(os.getenv("STATUS_INTERVAL_S", "2.0"))
 
 cloud_uploader = CloudUploader()
 
+pending_device_config = {
+    'diameter': DIA_INIT_METERS,
+}
+
+pending_algorithm_config = {
+    'c_sound': C_SOUND,
+    'rhoL': 0.10,
+    'rhoH': 2.00,
+    'angle_smooth': 0.85,
+    'rho_smooth': 0.35,
+    'coh_th': 1.10,
+    'vad_th': 6.0,
+    'loudness_threshold_db': None,
+}
+
 latest_result = {
     'timestamp': None,
     'wall_ts': None,
@@ -229,6 +244,42 @@ latest_result = {
     'channels': None,
     'samplerate': None,
 }
+
+
+def _parse_optional_float(value):
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        text = value.strip()
+        if text == '' or text.lower() in {'off', 'none', 'null', 'disabled'}:
+            return None
+        value = text
+
+    return float(value)
+
+
+def _apply_pending_config(data: dict):
+    if 'diameter' in data:
+        diameter = float(data['diameter'])
+        if not (0.06 < diameter < 0.6):
+            raise ValueError(f'Invalid diameter: {diameter}')
+        pending_device_config['diameter'] = diameter
+    if 'c_sound' in data:
+        pending_algorithm_config['c_sound'] = float(data['c_sound'])
+    if 'angle_smooth' in data:
+        pending_algorithm_config['angle_smooth'] = float(data['angle_smooth'])
+    if 'rho_smooth' in data:
+        pending_algorithm_config['rho_smooth'] = float(data['rho_smooth'])
+    if 'coh_th' in data:
+        pending_algorithm_config['coh_th'] = float(data['coh_th'])
+    if 'vad_th' in data:
+        pending_algorithm_config['vad_th'] = float(data['vad_th'])
+    if 'loudness_threshold_db' in data:
+        loudness_threshold_db = _parse_optional_float(data['loudness_threshold_db'])
+        if loudness_threshold_db is not None and loudness_threshold_db < 0.0:
+            raise ValueError('Loudness threshold must be >= 0 dB SPL')
+        pending_algorithm_config['loudness_threshold_db'] = loudness_threshold_db
 
 
 def _set_latest_from_engine_status():
@@ -313,7 +364,8 @@ def engine_worker():
                     latest_result['samplerate'] = getattr(engine, 'samplerate', None)
 
                 socketio.emit('localization_data', payload)
-                cloud_uploader.enqueue_result(_build_cloud_payload(result, now_wall, wall_iso))
+                if payload['angle'] is not None and payload['distance'] is not None:
+                    cloud_uploader.enqueue_result(_build_cloud_payload(result, now_wall, wall_iso))
 
             if (now_wall - last_status_wall) >= STATUS_INTERVAL_S:
                 last_status_wall = now_wall
@@ -394,13 +446,14 @@ def config():
 
     if request.method == 'GET':
         default_algorithm = {
-            'c_sound': C_SOUND,
-            'rhoL': 0.10,
-            'rhoH': 2.00,
-            'angle_smooth': 0.85,
-            'rho_smooth': 0.35,
-            'coh_th': 1.10,
-            'vad_th': 6.0,
+            'c_sound': pending_algorithm_config['c_sound'],
+            'rhoL': pending_algorithm_config['rhoL'],
+            'rhoH': pending_algorithm_config['rhoH'],
+            'angle_smooth': pending_algorithm_config['angle_smooth'],
+            'rho_smooth': pending_algorithm_config['rho_smooth'],
+            'coh_th': pending_algorithm_config['coh_th'],
+            'vad_th': pending_algorithm_config['vad_th'],
+            'loudness_threshold_db': pending_algorithm_config['loudness_threshold_db'],
             'default_device_hint': DEFAULT_DEVICE_HINT,
             'default_blocksize': DEFAULT_BLOCKSIZE,
         }
@@ -410,7 +463,7 @@ def config():
                 'device': {
                     'channels': CHANNELS,
                     'samplerate': SAMPLERATE if SAMPLERATE else 48000.0,
-                    'dia_init_meters': DIA_INIT_METERS
+                    'dia_init_meters': pending_device_config['diameter']
                 },
                 'algorithm': default_algorithm
             })
@@ -430,26 +483,33 @@ def config():
                     'rho_smooth': engine.rho_smooth,
                     'coh_th': engine.cohTh,
                     'vad_th': engine.vadTh,
+                    'loudness_threshold_db': engine.loudness_threshold_db,
                     'default_device_hint': DEFAULT_DEVICE_HINT,
                     'default_blocksize': DEFAULT_BLOCKSIZE,
                 }
             })
 
-    if engine is None:
-        return jsonify({'error': 'Engine not initialized'}), 400
-
     try:
-        data = request.get_json(force=True)
+        data = request.get_json(force=True) or {}
+        _apply_pending_config(data)
 
         if 'diameter' in data:
             new_dia = float(data['diameter'])
-            if engine.validate_diameter(new_dia):
+            if engine is None:
+                if not (0.06 < new_dia < 0.6):
+                    raise ValueError(f'Invalid diameter: {new_dia}')
+            elif engine.validate_diameter(new_dia):
                 engine.set_diameter(new_dia)
                 socketio.emit('config_update', {
                     'type': 'config',
                     'parameter': 'diameter',
                     'value': new_dia
                 })
+            else:
+                raise ValueError(f'Invalid diameter: {new_dia}')
+
+        if engine is None:
+            return jsonify({'success': True, 'message': 'Configuration saved'})
 
         if 'c_sound' in data:
             engine.c_sound = float(data['c_sound'])
@@ -461,6 +521,8 @@ def config():
             engine.cohTh = float(data['coh_th'])
         if 'vad_th' in data:
             engine.vadTh = float(data['vad_th'])
+        if 'loudness_threshold_db' in data:
+            engine.loudness_threshold_db = _parse_optional_float(data['loudness_threshold_db'])
 
         return jsonify({'success': True, 'message': 'Configuration updated'})
     except Exception as e:
@@ -476,6 +538,7 @@ def start_engine():
 
     try:
         req_json = request.get_json(silent=True) or {}
+        _apply_pending_config(req_json)
         device_name_hint = (req_json.get('device_name_hint') or DEFAULT_DEVICE_HINT)
         blocksize = int(req_json.get('blocksize', DEFAULT_BLOCKSIZE))
 
@@ -493,8 +556,15 @@ def start_engine():
         )
 
         algo_config = AlgorithmConfig(
-            c_sound=req_json.get('c_sound', C_SOUND),
-            dia_init_meters=req_json.get('diameter', DIA_INIT_METERS)
+            c_sound=pending_algorithm_config['c_sound'],
+            dia_init_meters=pending_device_config['diameter'],
+            rhoL=pending_algorithm_config['rhoL'],
+            rhoH=pending_algorithm_config['rhoH'],
+            angle_smooth=pending_algorithm_config['angle_smooth'],
+            rho_smooth=pending_algorithm_config['rho_smooth'],
+            coh_th=pending_algorithm_config['coh_th'],
+            vad_th=pending_algorithm_config['vad_th'],
+            loudness_threshold_db=pending_algorithm_config['loudness_threshold_db'],
         )
 
         engine = LocalizationEngine(device_config, algo_config)

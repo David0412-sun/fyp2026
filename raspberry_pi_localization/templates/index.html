@@ -210,6 +210,12 @@
                             <input type="number" id="vadThInput" 
                                    step="0.5" value="6.0">
                         </div>
+                        <div class="param-group">
+                            <label for="loudnessThresholdInput">Loudness Threshold (dB SPL)</label>
+                            <input type="number" id="loudnessThresholdInput"
+                                   step="0.1" min="0" placeholder="Disabled">
+                            <span class="param-hint">Leave blank to keep threshold gating off.</span>
+                        </div>
                         <button class="btn btn-outline btn-block" id="applyParams">
                             Apply Parameters
                         </button>

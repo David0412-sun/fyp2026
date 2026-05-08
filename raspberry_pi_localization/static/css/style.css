@@ -621,6 +621,12 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-secondary);
 }
 
+.param-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .input-group {
   display: flex;
   gap: var(--spacing-sm);

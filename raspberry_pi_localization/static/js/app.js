@@ -48,6 +48,57 @@
     return d.toLocaleString(undefined, { hour12: false });
   }
 
+  function readOptionalNumberInput(input) {
+    if (!input) return null;
+    const raw = String(input.value ?? '').trim();
+    if (!raw) return null;
+
+    const value = parseFloat(raw);
+    return isFinite(value) ? value : NaN;
+  }
+
+  function buildParameterPayload(includeDiameter = false) {
+    const params = {};
+
+    if (elements.cSoundInput) {
+      const cSound = parseFloat(elements.cSoundInput.value);
+      if (!isFinite(cSound)) {
+        throw new Error('Invalid speed of sound value');
+      }
+      params.c_sound = cSound;
+    }
+    if (elements.cohThInput) {
+      const coherenceThreshold = parseFloat(elements.cohThInput.value);
+      if (!isFinite(coherenceThreshold)) {
+        throw new Error('Invalid coherence threshold value');
+      }
+      params.coh_th = coherenceThreshold;
+    }
+    if (elements.vadThInput) {
+      const vadThreshold = parseFloat(elements.vadThInput.value);
+      if (!isFinite(vadThreshold)) {
+        throw new Error('Invalid VAD threshold value');
+      }
+      params.vad_th = vadThreshold;
+    }
+
+    const loudnessThreshold = readOptionalNumberInput(elements.loudnessThresholdInput);
+    if (Number.isNaN(loudnessThreshold)) {
+      throw new Error('Invalid loudness threshold value');
+    }
+    params.loudness_threshold_db = loudnessThreshold;
+
+    if (includeDiameter && elements.diameterInput) {
+      const diameter = parseFloat(elements.diameterInput.value);
+      if (!isFinite(diameter) || diameter <= 0) {
+        throw new Error('Invalid diameter value');
+      }
+      params.diameter = diameter;
+    }
+
+    return params;
+  }
+
 // =============================================================================
   // State Management
   // =============================================================================
@@ -136,6 +187,7 @@
     elements.cSoundInput = document.getElementById('cSoundInput');
     elements.cohThInput = document.getElementById('cohThInput');
     elements.vadThInput = document.getElementById('vadThInput');
+    elements.loudnessThresholdInput = document.getElementById('loudnessThresholdInput');
     
     // Loading overlay
     elements.loadingOverlay = document.getElementById('loadingOverlay');
@@ -468,8 +520,9 @@ function initPolarChart() {
  * @param {number} angle - Angle in degrees
  */
 function updatePolarChart(angle) {
-  if (!charts.polar || angle === null || !isFinite(angle)) return;
-  charts.polar.options.plugins.directionArrow.angle = wrap360(angle);
+  if (!charts.polar) return;
+  charts.polar.options.plugins.directionArrow.angle =
+    (angle === null || !isFinite(angle)) ? null : wrap360(angle);
   charts.polar.update('none');
 }
 
@@ -569,18 +622,22 @@ function updatePolarChart(angle) {
     }
     
     // Error metrics
-    if (elements.planeError && state.data.errorPlane !== null) {
-      elements.planeError.textContent = state.data.errorPlane.toFixed(1) + ' us';
+    if (elements.planeError) {
+      elements.planeError.textContent = (state.data.errorPlane !== null && isFinite(state.data.errorPlane))
+        ? state.data.errorPlane.toFixed(1) + ' us'
+        : '-- us';
     }
     
-    if (elements.nearError && state.data.errorNear !== null) {
-      elements.nearError.textContent = state.data.errorNear !== null 
-        ? state.data.errorNear.toFixed(1) + ' us' : '-- us';
+    if (elements.nearError) {
+      elements.nearError.textContent = (state.data.errorNear !== null && isFinite(state.data.errorNear))
+        ? state.data.errorNear.toFixed(1) + ' us'
+        : '-- us';
     }
     
-    if (elements.rhoHat && state.data.rhoHat !== null) {
-      elements.rhoHat.textContent = state.data.rhoHat !== null 
-        ? state.data.rhoHat.toFixed(3) + ' m' : '-- m';
+    if (elements.rhoHat) {
+      elements.rhoHat.textContent = (state.data.rhoHat !== null && isFinite(state.data.rhoHat))
+        ? state.data.rhoHat.toFixed(3) + ' m'
+        : '-- m';
     }
     
     // Indicators
@@ -597,9 +654,7 @@ function updatePolarChart(angle) {
     }
     
     // Update polar chart
-    if (state.data.angle !== null) {
-      updatePolarChart(state.data.angle);
-    }
+    updatePolarChart(state.data.angle);
   }
 
   /**
@@ -768,7 +823,7 @@ function updatePolarChart(angle) {
       }
     }
     
-    if (status.frame_count && elements.frameCount) {
+    if (typeof status.frame_count === 'number' && elements.frameCount) {
       elements.frameCount.textContent = status.frame_count.toLocaleString();
     }
   }
@@ -780,7 +835,10 @@ function updatePolarChart(angle) {
   function handleConfigUpdate(config) {
     if (config.type !== 'config') return;
     
-    showToast(`${config.parameter} updated to ${config.value}`, 'success', 3000);
+    const valueText = (config.value === null || typeof config.value === 'undefined' || config.value === '')
+      ? 'off'
+      : config.value;
+    showToast(`${config.parameter} updated to ${valueText}`, 'success', 3000);
   }
 
   /**
@@ -815,6 +873,9 @@ function updatePolarChart(angle) {
         }
         if (elements.vadThInput) {
           elements.vadThInput.value = config.algorithm.vad_th;
+        }
+        if (elements.loudnessThresholdInput) {
+          elements.loudnessThresholdInput.value = config.algorithm.loudness_threshold_db ?? '';
         }
       }
       
@@ -854,12 +915,13 @@ function updatePolarChart(angle) {
     }
     
     try {
+      const startParams = buildParameterPayload(true);
       const response = await fetch('/api/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({})
+        body: JSON.stringify(startParams)
       });
       
       const result = await response.json();
@@ -957,19 +1019,8 @@ function updatePolarChart(angle) {
    * Apply all parameter changes
    */
   async function applyParameters() {
-    const params = {};
-    
-    if (elements.cSoundInput) {
-      params.c_sound = parseFloat(elements.cSoundInput.value);
-    }
-    if (elements.cohThInput) {
-      params.coh_th = parseFloat(elements.cohThInput.value);
-    }
-    if (elements.vadThInput) {
-      params.vad_th = parseFloat(elements.vadThInput.value);
-    }
-    
     try {
+      const params = buildParameterPayload(false);
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: {
@@ -981,7 +1032,7 @@ function updatePolarChart(angle) {
       const result = await response.json();
       
       if (result.success) {
-        showToast('Parameters updated', 'success');
+        showToast(result.message || 'Parameters updated', 'success');
       } else {
         showToast('Failed to update parameters: ' + result.error, 'error');
       }
@@ -1058,6 +1109,14 @@ function updatePolarChart(angle) {
     // Apply parameters
     if (elements.applyParams) {
       elements.applyParams.addEventListener('click', applyParameters);
+    }
+
+    if (elements.loudnessThresholdInput && elements.applyParams) {
+      elements.loudnessThresholdInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          elements.applyParams.click();
+        }
+      });
     }
     
     // Window resize handler

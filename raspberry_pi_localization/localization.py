@@ -125,6 +125,7 @@ class AlgorithmConfig:
     rho_smooth: float = RHO_SMOOTH
     coh_th: float = COH_THRESHOLD
     vad_th: float = VAD_THRESHOLD
+    loudness_threshold_db: Optional[float] = None
 
 
 @dataclass
@@ -712,6 +713,7 @@ class LocalizationEngine:
         self.rho_smooth = self.algo_config.rho_smooth
         self.cohTh = self.algo_config.coh_th
         self.vadTh = self.algo_config.vad_th
+        self.loudness_threshold_db = self.algo_config.loudness_threshold_db
         
         # Initialize state
         self.running = False
@@ -979,6 +981,27 @@ class LocalizationEngine:
         # =================================================================
         # TDOA estimation using GCC-PHAT
         # =================================================================
+        threshold_db = self.loudness_threshold_db
+        if threshold_db is not None and sound_pressure_level_db < float(threshold_db):
+            self.t_history.append(self.realtime)
+            self.angle_history.append(float("nan"))
+            self.rho_history.append(float("nan"))
+
+            return LocalizationResult(
+                timestamp=self.realtime,
+                angle_deg=None,
+                distance_m=None,
+                snr_db=snr_db,
+                coherence=None,
+                diameter_m=self.diameter_m,
+                update_flag=False,
+                error_plane_us=None,
+                error_near_us=None,
+                rho_hat=None,
+                sound_pressure_level_db=sound_pressure_level_db,
+                valid=False
+            )
+
         tdoa, weights = gcc_phat_tdoa(
             xw, self.pairs, self.blocksize, self.samplerate, self.tau_max
         )
