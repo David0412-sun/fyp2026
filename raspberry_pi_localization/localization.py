@@ -89,6 +89,13 @@ TIME_WINDOW: float = 10.0      # Time window for plots in seconds
 MAX_HISTORY_POINTS: int = 2000
 ENABLE_TAU_CACHE: bool = True
 
+# Approximate SPL calibration for UI display. These values mirror the
+# experiment runner so the web dashboard uses the same approximate scale.
+FREQ_COMPENSATION_POINTS_HZ = np.array([20.0, 100.0, 900.0, 4000.0], dtype=float)
+FREQ_COMPENSATION_GAINS_DB = np.array([12.5, 12.5, 20.0, 30.0], dtype=float)
+SPL_REFERENCE_PRESSURE_PA: float = 20e-6
+SPL_CALIBRATION_OFFSET_DB: float = 10.0
+
 
 # =============================================================================
 # Data Classes
@@ -133,6 +140,7 @@ class LocalizationResult:
     error_plane_us: float
     error_near_us: float
     rho_hat: float
+    sound_pressure_level_db: Optional[float] = None
     valid: bool = True
     
     def to_dict(self) -> Dict[str, Any]:
@@ -148,6 +156,7 @@ class LocalizationResult:
             'error_plane_us': self.error_plane_us,
             'error_near_us': self.error_near_us,
             'rho_hat': self.rho_hat,
+            'sound_pressure_level_db': self.sound_pressure_level_db,
             'valid': self.valid
         }
 
@@ -229,6 +238,52 @@ def clamp(value: float, lo: float, hi: float) -> float:
         Clamped value
     """
     return max(lo, min(hi, value))
+
+
+def rms_to_spl_db(rms_value: float) -> float:
+    """
+    Convert an RMS pressure proxy to approximate dB SPL.
+
+    The microphone array is not a calibrated SPL meter, so this is an
+    approximate UI value based on the same empirical offset used by the
+    local experiment tooling.
+    """
+    rms_value = max(float(rms_value), 1e-12)
+    return 20.0 * math.log10(rms_value / SPL_REFERENCE_PRESSURE_PA) + SPL_CALIBRATION_OFFSET_DB
+
+
+def build_frequency_compensation_gain_db(blocksize: int, samplerate: float) -> np.ndarray:
+    """
+    Build the per-bin compensation curve used for SPL estimation.
+    """
+    freq_hz = np.abs(np.fft.fftfreq(blocksize, d=1.0 / samplerate))
+    safe_freq_hz = np.maximum(freq_hz, FREQ_COMPENSATION_POINTS_HZ[0])
+    gain_db = np.interp(
+        np.log10(safe_freq_hz),
+        np.log10(FREQ_COMPENSATION_POINTS_HZ),
+        FREQ_COMPENSATION_GAINS_DB,
+        left=float(FREQ_COMPENSATION_GAINS_DB[0]),
+        right=float(FREQ_COMPENSATION_GAINS_DB[-1]),
+    )
+    gain_db[freq_hz == 0.0] = float(FREQ_COMPENSATION_GAINS_DB[0])
+    return gain_db
+
+
+def apply_frequency_response_compensation(
+    frame: np.ndarray,
+    gain_linear_fft: np.ndarray,
+    blocksize: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Apply the empirical frequency-response compensation used for SPL display.
+
+    Returns:
+        Tuple of (time-domain compensated frame, compensated FFT)
+    """
+    Xi = np.fft.fft(frame, n=blocksize, axis=0)
+    Xi_comp = Xi * gain_linear_fft[:, None]
+    frame_comp = np.fft.ifft(Xi_comp, n=blocksize, axis=0).real
+    return frame_comp, Xi_comp
 
 
 def try_read_diameter_file(path: str) -> Optional[float]:
@@ -705,6 +760,9 @@ class LocalizationEngine:
         self.pairs = np.array(list(combinations(range(self.channels), 2)), dtype=int)
         self.blocksize = int(device_config.blocksize)
         self.window = hann_window(self.blocksize)[:, None]  # shape (N,1) for broadcasting over channels
+        self.freq_compensation_gain_linear_fft = 10.0 ** (
+            build_frequency_compensation_gain_db(self.blocksize, self.samplerate) / 20.0
+        )
         
         # Precompute pair differences
         self.A_pairs = pair_differences(self.mic_positions, self.pairs)
@@ -900,12 +958,21 @@ class LocalizationEngine:
         
         # Apply window and convert to double
         x = block.astype(np.float64, copy=False)
+        x_comp, _ = apply_frequency_response_compensation(
+            x,
+            self.freq_compensation_gain_linear_fft,
+            self.blocksize,
+        )
         xw = x * self.window
         
         # =================================================================
         # SNR estimation
         # =================================================================
         
+        spl_rms = float(np.median(np.sqrt(np.mean(x_comp ** 2, axis=0))))
+        spl_rms = max(spl_rms, 1e-12)
+        sound_pressure_level_db = rms_to_spl_db(spl_rms)
+
         frm_rms = float(np.median(np.sqrt(np.mean(xw ** 2, axis=0))))
         frm_rms = max(frm_rms, 1e-9)
         snr_db = 20.0 * math.log10(frm_rms)  # 仅用于UI显示电平（不是SNR）
@@ -1066,6 +1133,7 @@ class LocalizationEngine:
             error_plane_us=error_plane,
             error_near_us=error_near,
             rho_hat=rho_hat,
+            sound_pressure_level_db=sound_pressure_level_db,
             valid=valid_detection
         )
     

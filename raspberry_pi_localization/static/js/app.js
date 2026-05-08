@@ -61,6 +61,7 @@
       angleRaw: null,
       distance: null,
       snr: null,
+      spl: null,
       coherence: null,
       diameter: null,
       timestamp: 0,
@@ -105,6 +106,7 @@
     elements.channelsValue = document.getElementById('channelsValue');
     elements.sampleRateValue = document.getElementById('sampleRateValue');
     elements.snrValue = document.getElementById('snrValue');
+    elements.splValue = document.getElementById('splValue');
     elements.coherenceValue = document.getElementById('coherenceValue');
     elements.planeError = document.getElementById('planeError');
     elements.nearError = document.getElementById('nearError');
@@ -115,6 +117,7 @@
     
     // Meters
     elements.snrMeter = document.getElementById('snrMeter');
+    elements.splMeter = document.getElementById('splMeter');
     elements.coherenceMeter = document.getElementById('coherenceMeter');
     
     // Indicators
@@ -515,10 +518,6 @@ function updatePolarChart(angle) {
     if (elements.timeValue) {
       elements.timeValue.textContent = formatWallTime(state.data.wallTimeIso);
     }
-
-    if (elements.timeValue) {
-      elements.timeValue.textContent = formatWallTime(state.data.wallTimeIso);
-    }
     
     if (elements.diameterValue) {
       elements.diameterValue.textContent = state.data.diameter !== null 
@@ -539,14 +538,34 @@ function updatePolarChart(angle) {
     }
     
     // Signal quality
-    if (elements.snrValue && state.data.snr !== null) {
-      elements.snrValue.textContent = state.data.snr.toFixed(1) + ' dB';
-      elements.snrMeter.style.width = Math.min(100, Math.max(0, (state.data.snr + 20) * 2)) + '%';
+    if (elements.snrValue) {
+      if (state.data.snr !== null && isFinite(state.data.snr)) {
+        elements.snrValue.textContent = state.data.snr.toFixed(1) + ' dB';
+        elements.snrMeter.style.width = Math.min(100, Math.max(0, (state.data.snr + 20) * 2)) + '%';
+      } else {
+        elements.snrValue.textContent = '-- dB';
+        elements.snrMeter.style.width = '0%';
+      }
+    }
+
+    if (elements.splValue) {
+      if (state.data.spl !== null && isFinite(state.data.spl)) {
+        elements.splValue.textContent = state.data.spl.toFixed(1) + ' dB';
+        elements.splMeter.style.width = Math.min(100, Math.max(0, ((state.data.spl - 30) / 90) * 100)) + '%';
+      } else {
+        elements.splValue.textContent = '-- dB';
+        elements.splMeter.style.width = '0%';
+      }
     }
     
-    if (elements.coherenceValue && state.data.coherence !== null) {
-      elements.coherenceValue.textContent = state.data.coherence.toFixed(2);
-      elements.coherenceMeter.style.width = Math.min(100, state.data.coherence * 50) + '%';
+    if (elements.coherenceValue) {
+      if (state.data.coherence !== null && isFinite(state.data.coherence)) {
+        elements.coherenceValue.textContent = state.data.coherence.toFixed(2);
+        elements.coherenceMeter.style.width = Math.min(100, state.data.coherence * 50) + '%';
+      } else {
+        elements.coherenceValue.textContent = '--';
+        elements.coherenceMeter.style.width = '0%';
+      }
     }
     
     // Error metrics
@@ -692,6 +711,7 @@ function updatePolarChart(angle) {
     state.data.angle = (data.angle !== null && isFinite(data.angle)) ? angleStdToDisplay(data.angle) : null;
     state.data.distance = data.distance;
     state.data.snr = data.snr_db;
+    state.data.spl = data.sound_pressure_level_db ?? data.spl_db ?? null;
     state.data.coherence = data.coherence;
     state.data.diameter = data.diameter_m;
     state.data.timestamp = data.timestamp;

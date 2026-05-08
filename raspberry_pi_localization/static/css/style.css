@@ -567,6 +567,10 @@ input:focus, select:focus, textarea:focus {
   width: 0%;
 }
 
+.meter-fill-spl {
+  background: linear-gradient(90deg, var(--info-color), var(--warning-color));
+}
+
 .quality-indicators {
   display: flex;
   gap: var(--spacing-md);

@@ -7,7 +7,7 @@
     <title>8-Channel Localization System</title>
     
     <!-- External Libraries -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     
@@ -144,6 +144,15 @@
                                 </div>
                                 <div class="meter-bar">
                                     <div class="meter-fill" id="snrMeter"></div>
+                                </div>
+                            </div>
+                            <div class="meter-item">
+                                <div class="meter-label">
+                                    <span>SPL</span>
+                                    <span class="meter-value" id="splValue">-- dB</span>
+                                </div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill meter-fill-spl" id="splMeter"></div>
                                 </div>
                             </div>
                             <div class="meter-item">
